@@ -17,9 +17,21 @@
     <ClCompile Include="fnlsim.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="kheap.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="vmm.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="kheap.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="vmm.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>

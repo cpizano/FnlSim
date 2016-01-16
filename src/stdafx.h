@@ -11,6 +11,11 @@
 
 #include <stdio.h>
 #include <tchar.h>
+#include <stdint.h>
+
+#define KPANIC  __debugbreak()
+#define CHECK(x, y)  if ((x) != (y)) KPANIC
+#define CHECKNE(x, y)  if ((x) == (y)) KPANIC
 
 
 // TODO: reference additional headers your program requires here

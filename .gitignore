@@ -7,3 +7,4 @@
 /src/.vs/fnlsim/v14
 *.sdf
 *.opendb
+*.ipch
