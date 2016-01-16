@@ -1,2 +1,2 @@
 # FnlSim
-user mode fnl simulator
+user mode fnl OS simulator
