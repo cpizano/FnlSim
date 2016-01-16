@@ -1,0 +1,9 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/src/x64/Debug
+/src/ipch/FNLSIM-8d5d80a5
+/src/.vs/fnlsim/v14
+*.sdf
+*.opendb
