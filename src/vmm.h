@@ -6,7 +6,6 @@ namespace vmm {
 enum Type {
   none,
   kern_heap,
-
 };
 
 struct Region {

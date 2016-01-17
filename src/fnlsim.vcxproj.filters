@@ -23,6 +23,9 @@
     <ClCompile Include="vmm.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="handle.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -32,6 +35,12 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="vmm.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="object.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="handle.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>

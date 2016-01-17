@@ -15,7 +15,6 @@ void add_region(Region* r) {
 int init() {
   vm_region = kheap::make_isll();
   add_region(kheap::get_region());
-
   return 0;
 }
 
