@@ -141,6 +141,7 @@
     <ClInclude Include="handle.h" />
     <ClInclude Include="kheap.h" />
     <ClInclude Include="object.h" />
+    <ClInclude Include="sim.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="vmm.h" />
   </ItemGroup>
@@ -148,6 +149,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="handle.cpp" />
     <ClCompile Include="kheap.cpp" />
+    <ClCompile Include="sim.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
