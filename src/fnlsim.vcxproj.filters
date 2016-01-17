@@ -14,9 +14,6 @@
     <ClCompile Include="stdafx.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="fnlsim.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="kheap.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -24,6 +21,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="handle.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

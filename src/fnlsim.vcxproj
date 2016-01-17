@@ -145,7 +145,7 @@
     <ClInclude Include="vmm.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="fnlsim.cpp" />
+    <ClCompile Include="main.cpp" />
     <ClCompile Include="handle.cpp" />
     <ClCompile Include="kheap.cpp" />
     <ClCompile Include="stdafx.cpp">
