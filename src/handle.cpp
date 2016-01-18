@@ -9,7 +9,7 @@ namespace handle {
 const uint32_t first_lev_count = 64U;
 
 Entry* make_table() {
-  Entry* e = (Entry*)kheap::alloc(sizeof(Entry) * first_lev_count);
+  Entry* e = kheap::alloc_t<Entry>(first_lev_count);
   e[0].type = obj::sentry;
   return e;
 }

@@ -46,10 +46,10 @@ void init_thread_obj(FnlThread* thread, FnlProcess* proc, uint64_t id) {
 }
 
 void make_sys_process(char* name, uint64_t thread_id, uint64_t proc_id) {
-  FnlProcess* proc = kheap::make_isll_node<FnlProcess>();
+  FnlProcess* proc = kheap::alloc_t<FnlProcess>(1);
   init_process_obj(proc, proc_id, name);
 
-  FnlThread* thread = kheap::make_isll_node<FnlThread>();
+  FnlThread* thread = kheap::alloc_t<FnlThread>(1);
   init_thread_obj(thread, proc, thread_id);
 
   kheap::push_isll(processes, (kheap::isll_entry*)proc);
@@ -65,7 +65,7 @@ struct CoreCBlock {
 };
 
 void init_cblock(int core_id) {
-  CoreCBlock* cblk = (CoreCBlock*)kheap::alloc_a16(sizeof(CoreCBlock));
+  CoreCBlock* cblk = kheap::alloc_t<CoreCBlock>(1);
   cblk->core_id = core_id;
   cblk->ready_th = kheap::make_isll();
   cblk->other_th = kheap::make_isll();

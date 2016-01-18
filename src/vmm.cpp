@@ -7,7 +7,7 @@ namespace vmm {
 kheap::isll_head vm_region;
 
 void add_region(Region* r) {
-  Region* n = kheap::make_isll_node<Region>();
+  Region* n = kheap::alloc_t<Region>(1);
   *n = *r;
   kheap::push_isll(vm_region, (kheap::isll_entry*)n);
 }

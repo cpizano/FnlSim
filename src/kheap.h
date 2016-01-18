@@ -6,8 +6,11 @@ namespace vmm {
 
 namespace kheap {
 
-void* alloc(uint64_t size);
-void* alloc_a16(uint64_t size);
+void* alloc_raw(uint64_t size);
+
+template <typename N> N* alloc_t(int32_t c) {
+  return (N*)alloc_raw(sizeof(N)*c);
+}
 void  free(void* mem);
 
 uint32_t get_reladdr(void* add);
@@ -21,10 +24,7 @@ void destroy_isll(isll_head head);
 void push_isll(isll_head head, isll_entry* item);
 isll_entry* pop_isll(isll_head head);
 
-template <typename N>
-N* make_isll_node() {
-  return (N*)alloc_a16(sizeof(N));
-}
+
 
 void init();
 vmm::Region* get_region();

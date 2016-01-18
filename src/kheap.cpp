@@ -5,6 +5,7 @@
 HANDLE heap = nullptr;
 char*  heap_start = nullptr;
 
+//fixed kernel heap size of 16M.
 const uint64_t heap_sz = 16 * 1024 * 1024;
 
 void kheap::init() {
@@ -13,11 +14,7 @@ void kheap::init() {
   get_region();
 }
 
-void* kheap::alloc(uint64_t size) {
-  return ::HeapAlloc(heap, HEAP_ZERO_MEMORY | HEAP_GENERATE_EXCEPTIONS, size);
-}
-
-void* kheap::alloc_a16(uint64_t size) {
+void* kheap::alloc_raw(uint64_t size) {
   return ::HeapAlloc(heap, HEAP_ZERO_MEMORY | HEAP_GENERATE_EXCEPTIONS | HEAP_CREATE_ALIGN_16, size);
 }
 
@@ -35,7 +32,7 @@ void * kheap::get_fulladdr(uint32_t readd) {
 
 
 kheap::isll_head kheap::make_isll() {
-  SLIST_HEADER* hdr = (SLIST_HEADER*)alloc_a16(sizeof(SLIST_HEADER));
+  SLIST_HEADER* hdr = alloc_t<SLIST_HEADER>(1);
   ::InitializeSListHead(hdr);
   return hdr;
 }
