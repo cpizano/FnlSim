@@ -8,16 +8,16 @@
 #include "object.h"
 #include "handle.h"
 
-kheap::isll_head processes;
-kheap::isll_head threads;
+list::list processes;
+list::list threads;
 
 struct FnlProcess {
   obj::Base fno;
 
   uint64_t id;
   char* bin_name;
-  kheap::isll_head regions;
-  kheap::isll_head threads;
+  list::list regions;
+  list::list threads;
   handle::Entry* handles;
 };
 
@@ -33,8 +33,8 @@ void init_process_obj(FnlProcess* proc, uint64_t id, char* bin_name) {
   proc->fno.type = obj::process;
   proc->id = id;
   proc->bin_name = bin_name;
-  proc->regions = kheap::make_isll();
-  proc->threads = kheap::make_isll();
+  list::init(&proc->regions);
+  list::init(&proc->threads);
   proc->handles = handle::make_table();
 }
 
@@ -52,23 +52,23 @@ void make_sys_process(char* name, uint64_t thread_id, uint64_t proc_id) {
   FnlThread* thread = kheap::alloc_t<FnlThread>(1);
   init_thread_obj(thread, proc, thread_id);
 
-  kheap::push_isll(processes, (kheap::isll_entry*)proc);
-  kheap::push_isll(threads, (kheap::isll_entry*)thread);
+  list::push_back(&processes, &proc->fno.node);
+  list::push_back(&threads, &thread->fno.node);
 }
 
 namespace hal {
 
 struct CoreCBlock {
   int core_id;
-  kheap::isll_head ready_th;
-  kheap::isll_head other_th;
+  list::list ready_th;
+  list::list other_th;
 };
 
 void init_cblock(int core_id) {
   CoreCBlock* cblk = kheap::alloc_t<CoreCBlock>(1);
   cblk->core_id = core_id;
-  cblk->ready_th = kheap::make_isll();
-  cblk->other_th = kheap::make_isll();
+  list::init(&cblk->ready_th);
+  list::init(&cblk->other_th);
   sim::kern_gs(cblk);
 }
 
@@ -81,10 +81,9 @@ void init_core0() {
 namespace exec {
 
 void init() {
-  processes = kheap::make_isll();
-  threads = kheap::make_isll();
+  list::init(&processes);
+  list::init(&threads);
   make_sys_process(":sys0", 1UL, 1UL);
-
 }
 
 }

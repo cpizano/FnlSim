@@ -1,5 +1,5 @@
 #pragma once
-#include "kheap.h"
+#include "list.h"
 
 namespace vmm {
 
@@ -9,7 +9,7 @@ enum Type {
 };
 
 struct Region {
-  kheap::isll_entry isl;
+  list::node node;
   Type type;
   void* start;
   uint64_t len;

@@ -30,25 +30,6 @@ void * kheap::get_fulladdr(uint32_t readd) {
   return (void*)(heap_start + readd);
 }
 
-
-kheap::isll_head kheap::make_isll() {
-  SLIST_HEADER* hdr = alloc_t<SLIST_HEADER>(1);
-  ::InitializeSListHead(hdr);
-  return hdr;
-}
-
-void kheap::destroy_isll(kheap::isll_head head) {
-  kheap::free(head);
-}
-
-void kheap::push_isll(kheap::isll_head head, kheap::isll_entry * item) {
-  ::InterlockedPushEntrySList(head, item);
-}
-
-kheap::isll_entry * kheap::pop_isll(isll_head head) {
-  return ::InterlockedPopEntrySList(head);
-}
-
 vmm::Region * kheap::get_region() {
   static vmm::Region heapreg = {};
 

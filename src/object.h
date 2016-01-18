@@ -1,10 +1,11 @@
 #pragma once
+#include "list.h"
 
 namespace obj {
 
 // First member (or base class) for any kernel object.
 struct Base {
-  kheap::isll_entry entry;
+  list::node node;
   uint64_t refcnt;
   uint16_t type;
 };
