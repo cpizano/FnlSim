@@ -14,7 +14,7 @@ void add_region(Region* r) {
 
 int init() {
   list::init(&vm_regions);
-  add_region(kheap::get_region());
+  kheap::init();
   return 0;
 }
 

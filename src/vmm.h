@@ -16,6 +16,7 @@ struct Region {
 };
 
 int init();
+void add_region(Region* r);
 
 };
 

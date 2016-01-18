@@ -8,10 +8,43 @@ char*  heap_start = nullptr;
 //fixed kernel heap size of 16M.
 const uint64_t heap_sz = 16 * 1024 * 1024;
 
+namespace {
+
+vmm::Region get_heap_region(HANDLE heap) {
+  PROCESS_HEAP_ENTRY phe = { 0 };
+  vmm::Region region;
+  while (true) {
+    if (!::HeapWalk(heap, &phe))
+      break;
+    switch (phe.wFlags) {
+    case 0:
+      break;
+    case PROCESS_HEAP_REGION:
+      region.start = phe.lpData;
+      region.len = phe.Region.dwCommittedSize;
+      region.type = vmm::kern_heap;
+      break;
+    case PROCESS_HEAP_UNCOMMITTED_RANGE:
+      CHECK(phe.cbData, 0UL);
+      break;
+    case PROCESS_HEAP_ENTRY_BUSY:
+      break;
+    default:
+      KPANIC;
+    }
+  }
+  return region;
+}
+
+}  // namespace
+
 void kheap::init() {
   heap = ::HeapCreate(HEAP_GENERATE_EXCEPTIONS, heap_sz, heap_sz);
   CHECKNE(heap, NULL);
-  get_region();
+
+  vmm::Region region = get_heap_region(heap);
+  heap_start = (char*)region.start;
+  vmm::add_region(&region);
 }
 
 void* kheap::alloc_raw(uint64_t size) {
@@ -30,34 +63,3 @@ void * kheap::get_fulladdr(uint32_t readd) {
   return (void*)(heap_start + readd);
 }
 
-vmm::Region * kheap::get_region() {
-  static vmm::Region heapreg = {};
-
-  if (heapreg.start) {
-    return &heapreg;
-  }
-
-  PROCESS_HEAP_ENTRY phe = { 0 };
-  while (true) {
-    if (!::HeapWalk(heap, &phe))
-      break;
-    switch (phe.wFlags) {
-    case 0:
-      break;
-    case PROCESS_HEAP_REGION:
-      heap_start = (char*)phe.lpData;
-      heapreg.start = phe.lpData;
-      heapreg.len = phe.Region.dwCommittedSize;
-      heapreg.type = vmm::kern_heap;
-      break;
-    case PROCESS_HEAP_UNCOMMITTED_RANGE:
-      CHECK(phe.cbData, 0UL);
-      break;
-    case PROCESS_HEAP_ENTRY_BUSY:
-      break;
-    default:
-      KPANIC;
-    }
-  }
-  return &heapreg;
-}

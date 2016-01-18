@@ -89,9 +89,8 @@ void init() {
 }
 
 unsigned long __stdcall fnl_init(void*) {
-  kheap::init();
-  hal::init_core0();
   vmm::init();
+  hal::init_core0();
   exec::init();
   return 0;
 }

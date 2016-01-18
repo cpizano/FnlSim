@@ -17,6 +17,5 @@ uint32_t get_reladdr(void* add);
 void* get_fulladdr(uint32_t readd);
 
 void init();
-vmm::Region* get_region();
 
 }
