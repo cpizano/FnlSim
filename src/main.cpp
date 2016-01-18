@@ -45,6 +45,7 @@ void init_thread_obj(FnlThread* thread, FnlProcess* proc, uint64_t id) {
   thread->core = -1;
 }
 
+
 void make_sys_process(char* name, uint64_t thread_id, uint64_t proc_id) {
   FnlProcess* proc = kheap::alloc_t<FnlProcess>(1);
   init_process_obj(proc, proc_id, name);
@@ -88,7 +89,7 @@ void init() {
 
 }
 
-unsigned long __stdcall fnl_init(void*) {
+int fnl_init() {
   vmm::init();
   hal::init_core0();
   exec::init();

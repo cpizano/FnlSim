@@ -6,16 +6,11 @@ namespace sim {
 
 struct Core {
   HANDLE win_th;
-  CONTEXT ctx;
+  void* fiber;
 };
 
 Core cores[num_cores];
 HANDLE cport;
-
-unsigned long __stdcall holder_tfn(void*) {
-  KPANIC;
-  return 0;
-}
 
 void* kern_gs(void* new_gs) {
   __declspec(thread) static void* gs;
@@ -41,28 +36,32 @@ void* user_gs(void* new_gs) {
   }
 }
 
-void init_core(Core* core) {
-  core->win_th = ::CreateThread(nullptr, 0, holder_tfn, nullptr, CREATE_SUSPENDED, nullptr);
-  CHECKNE(core->win_th, nullptr);
-  core->ctx.ContextFlags = CONTEXT_ALL;
-  ::GetThreadContext(core->win_th, &core->ctx);
+struct StartCtx {
+  Core* core;
+  StartFn fn;
+};
+
+unsigned long __stdcall start_tfn(void* p) {
+  auto ctx = reinterpret_cast<StartCtx*>(p);
+  ctx->core->fiber = ::ConvertThreadToFiberEx(nullptr, FIBER_FLAG_FLOAT_SWITCH);
+  int rv = ctx->fn();
+  KPANIC;
+  return 0;
 }
 
-void core_start(int core_id, void* start) {
-  Core& core = cores[core_id];
-  // This only works with newly created (suspended) threads.
-  core.ctx.Rcx = (DWORD64)start;
-  core.ctx.ContextFlags = CONTEXT_INTEGER;
-  ::SetThreadContext(core.win_th, &core.ctx);
-  ::ResumeThread(core.win_th);
+void core_start(int core_id, StartFn start) {
+  Core* core = &cores[core_id];
+  auto ctx = new StartCtx{core, start};
+  core->win_th = ::CreateThread(nullptr, stack_size, start_tfn, ctx, 0, nullptr);
+}
+
+void* make_thread(ThreadFn fn) {
+  return ::CreateFiberEx(stack_size, 0, FIBER_FLAG_FLOAT_SWITCH, fn, nullptr);
 }
 
 void init() {
   cport = ::CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 1);
   CHECKNE(cport, nullptr);
-  for (int ix = 0; ix != num_cores; ++ix) {
-    init_core(&cores[ix]);
-  }
 }
 
 void run() {
