@@ -25,7 +25,7 @@ struct FnlThread {
   obj::Base fno;
 
   uint64_t id;
-  HANDLE win_th;
+  int32_t core;
   FnlProcess* proc;
 };
 
@@ -42,17 +42,40 @@ void init_thread_obj(FnlThread* thread, FnlProcess* proc, uint64_t id) {
   thread->fno.type = obj::thread;
   thread->id = id;
   thread->proc = proc;
+  thread->core = -1;
 }
 
-void make_kernel_process() {
+void make_sys_process(char* name, uint64_t thread_id, uint64_t proc_id) {
   FnlProcess* proc = kheap::make_isll_node<FnlProcess>();
-  init_process_obj(proc, 1, ":sys0");
+  init_process_obj(proc, proc_id, name);
 
   FnlThread* thread = kheap::make_isll_node<FnlThread>();
-  init_thread_obj(thread, proc, 1);
+  init_thread_obj(thread, proc, thread_id);
 
   kheap::push_isll(processes, (kheap::isll_entry*)proc);
   kheap::push_isll(threads, (kheap::isll_entry*)thread);
+}
+
+namespace hal {
+
+struct CoreCBlock {
+  int core_id;
+  kheap::isll_head ready_th;
+  kheap::isll_head other_th;
+};
+
+void init_cblock(int core_id) {
+  CoreCBlock* cblk = (CoreCBlock*)kheap::alloc_a16(sizeof(CoreCBlock));
+  cblk->core_id = core_id;
+  cblk->ready_th = kheap::make_isll();
+  cblk->other_th = kheap::make_isll();
+  sim::kern_gs(cblk);
+}
+
+void init_core0() {
+  init_cblock(0);
+}
+
 }
 
 namespace exec {
@@ -60,13 +83,15 @@ namespace exec {
 void init() {
   processes = kheap::make_isll();
   threads = kheap::make_isll();
-  make_kernel_process();
+  make_sys_process(":sys0", 1UL, 1UL);
+
 }
 
 }
 
 unsigned long __stdcall fnl_init(void*) {
   kheap::init();
+  hal::init_core0();
   vmm::init();
   exec::init();
   return 0;

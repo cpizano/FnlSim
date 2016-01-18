@@ -17,6 +17,30 @@ unsigned long __stdcall holder_tfn(void*) {
   return 0;
 }
 
+void* kern_gs(void* new_gs) {
+  __declspec(thread) static void* gs;
+  if (new_gs) {
+    void* tmp = gs;
+    gs = new_gs;
+    return tmp;
+  }
+  else {
+    return gs;
+  }
+}
+
+void* user_gs(void* new_gs) {
+  __declspec(thread) static void* gs;
+  if (new_gs) {
+    void* tmp = gs;
+    gs = new_gs;
+    return tmp;
+  }
+  else {
+    return gs;
+  }
+}
+
 void init_core(Core* core) {
   core->win_th = ::CreateThread(nullptr, 0, holder_tfn, nullptr, CREATE_SUSPENDED, nullptr);
   CHECKNE(core->win_th, nullptr);
