@@ -6,7 +6,6 @@ namespace sim {
 
 struct Core {
   HANDLE win_th;
-  void* fiber;
 };
 
 Core cores[num_cores];
@@ -37,26 +36,46 @@ void* user_gs(void* new_gs) {
 }
 
 struct StartCtx {
-  Core* core;
   StartFn fn;
 };
 
+__declspec(thread) void* ctx_original;
+__declspec(thread) void* ctx_int_fiber;
+
+void __stdcall force_interrupt() {
+  ::SwitchToFiber(ctx_int_fiber);
+}
+
+void __stdcall interrupt_fn(void* p) {
+  volatile uint64_t z = 0;
+  while (true) {
+    ++z;
+  }
+}
+
 unsigned long __stdcall start_tfn(void* p) {
   auto ctx = reinterpret_cast<StartCtx*>(p);
-  ctx->core->fiber = ::ConvertThreadToFiberEx(nullptr, FIBER_FLAG_FLOAT_SWITCH);
+  ctx_original = ::ConvertThreadToFiberEx(nullptr, FIBER_FLAG_FLOAT_SWITCH);
+  ctx_int_fiber = ::CreateFiberEx(stack_size, 0, FIBER_FLAG_FLOAT_SWITCH, interrupt_fn, nullptr);
   int rv = ctx->fn();
-  KPANIC;
+  while (true) {
+    ::SwitchToFiber(ctx_int_fiber);
+  }
   return 0;
 }
 
 void core_start(int core_id, StartFn start) {
   Core* core = &cores[core_id];
-  auto ctx = new StartCtx{core, start};
+  auto ctx = new StartCtx{start};
   core->win_th = ::CreateThread(nullptr, stack_size, start_tfn, ctx, 0, nullptr);
 }
 
 void* make_thread(ThreadFn fn) {
   return ::CreateFiberEx(stack_size, 0, FIBER_FLAG_FLOAT_SWITCH, fn, nullptr);
+}
+
+void run_thread(void* context) {
+  ::SwitchToFiber(context);
 }
 
 void init() {

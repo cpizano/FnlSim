@@ -17,6 +17,6 @@ void* user_gs(void* new_gs);
 void core_start(int core_id, StartFn fn);
 
 void* make_thread(ThreadFn fn);
-
+void run_thread(void* context);
 
 }
