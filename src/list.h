@@ -89,8 +89,8 @@ the structure that LIST_ELEM is embedded inside.  Supply the
 name of the outer structure and the member name MEMBER
 of the list element.  See the big comment at the top of the
 file for an example. */
-#define entry(LIST_ELEM, STRUCT, MEMBER)           \
-        ((*) ((uint8_t *) &(LIST_ELEM)->next            \
+#define node_to_entry(LIST_ELEM, STRUCT, MEMBER)        \
+        ((STRUCT*) ((uint8_t *) &(LIST_ELEM)->next            \
                      - offsetof (STRUCT, MEMBER.next)))
 
 namespace list {
