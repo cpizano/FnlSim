@@ -1,11 +1,15 @@
 #include "stdafx.h"
 #include "sim.h"
 
+namespace {
+
+}
 
 namespace sim {
 
 struct Core {
   HANDLE win_th;
+  CONTEXT th_ctx;
 };
 
 Core cores[num_cores];
@@ -39,25 +43,16 @@ struct StartCtx {
   StartFn fn;
 };
 
-__declspec(thread) void* ctx_original;
-__declspec(thread) void* ctx_int_fiber;
+void* ctx_int_fiber = nullptr;
 
-void __stdcall force_interrupt() {
-  ::SwitchToFiber(ctx_int_fiber);
-}
-
-void __stdcall interrupt_fn(void* p) {
-  volatile uint64_t z = 0;
-  while (true) {
-    ++z;
-  }
-}
+volatile int strange = 0;
 
 unsigned long __stdcall start_tfn(void* p) {
   auto ctx = reinterpret_cast<StartCtx*>(p);
-  ctx_original = ::ConvertThreadToFiberEx(nullptr, FIBER_FLAG_FLOAT_SWITCH);
-  ctx_int_fiber = ::CreateFiberEx(stack_size, 0, FIBER_FLAG_FLOAT_SWITCH, interrupt_fn, nullptr);
-  int rv = ctx->fn();
+  ::ConvertThreadToFiberEx(nullptr, FIBER_FLAG_FLOAT_SWITCH);
+  ctx_int_fiber = ctx->fn();
+  ::SuspendThread(GetCurrentThread());
+  strange = strange + 1;
   while (true) {
     ::SwitchToFiber(ctx_int_fiber);
   }
@@ -68,13 +63,26 @@ void core_start(int core_id, StartFn start) {
   Core* core = &cores[core_id];
   auto ctx = new StartCtx{start};
   core->win_th = ::CreateThread(nullptr, stack_size, start_tfn, ctx, 0, nullptr);
+  while (true) {
+    ::SuspendThread(core->win_th);
+    auto count = ::ResumeThread(core->win_th);
+    if (count == 2UL)
+      break;
+    ::Sleep(10);
+  }
+  core->th_ctx.ContextFlags = CONTEXT_ALL;
+  if (!::GetThreadContext(core->win_th, &core->th_ctx))
+    __debugbreak();
+  ::ResumeThread(core->win_th);
 }
 
-void* make_thread(ThreadFn fn) {
-  return ::CreateFiberEx(stack_size, 0, FIBER_FLAG_FLOAT_SWITCH, fn, nullptr);
+void* make_context(ThreadFn fn) {
+  return ::CreateFiberEx(0, stack_size, FIBER_FLAG_FLOAT_SWITCH, fn, nullptr);
 }
 
-void run_thread(void* context) {
+
+void switch_context(void* context) {
+  wprintf(L"ctx is %p\n", context);
   ::SwitchToFiber(context);
 }
 
@@ -91,9 +99,14 @@ void run() {
   wprintf(L"fnl sim running. %d cores x64\n", num_cores);
 
   while (true) {
-    BOOL rv = ::GetQueuedCompletionStatus(cport, &bytes, &key, &ov, INFINITE);
+    BOOL rv = ::GetQueuedCompletionStatus(cport, &bytes, &key, &ov, 2000);
     if (!rv) {
-      wprintf(L"got cp error\n");
+      wprintf(L"timer\n");
+      auto sc = ::SuspendThread(cores[0].win_th);
+      cores[0].th_ctx.ContextFlags = CONTEXT_ALL; //CONTEXT_FULL | CONTEXT_DEBUG_REGISTERS;
+      if (!::SetThreadContext(cores[0].win_th, &cores[0].th_ctx))
+        __debugbreak();
+      ::ResumeThread(cores[0].win_th);
     }
     else {
       wprintf(L"got event. exiting\n");

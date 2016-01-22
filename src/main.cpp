@@ -9,9 +9,6 @@
 #include "object.h"
 #include "handle.h"
 
-list::list processes;
-list::list threads;
-
 struct FnlProcess {
   obj::Base fno;
   uint64_t id;
@@ -23,16 +20,13 @@ struct FnlProcess {
 
 struct FnlThread {
   obj::Base fno;
+  list::node snode;
+
   uint64_t id;
   int32_t core;
   FnlProcess* proc;
   void* ctx;
 };
-
-template <typename T>
-T* get(list::node* n) {
-  return node_to_entry(n, T, fno.node);
-}
 
 struct CoreCBlock {
   int core_id;
@@ -64,6 +58,9 @@ FnlThread* make_thread_obj(FnlProcess* proc, uint64_t id) {
 
 namespace exec {
 
+list::list processes;
+list::list threads;
+
 void init_core_block(int core_id) {
   CoreCBlock* cblk = kheap::alloc_t<CoreCBlock>(1);
   cblk->core_id = core_id;
@@ -84,28 +81,59 @@ void init_all_cores() {
 }
 
 void add_thread(FnlThread* thread, sim::ThreadFn fn) {
-  thread->ctx = sim::make_thread(fn);
+  thread->ctx = sim::make_context(fn);
   CoreCBlock* cb = exec::get_core_block();
-  list::push_back(&cb->ready_th, &thread->fno.node);
+  list::push_back(&cb->ready_th, &thread->snode);
 }
 
-void __stdcall sys_routine(void* p) {
+void __stdcall sys_routine1(void* p) {
   volatile uint64_t x = 0;
   while (true) {
     ++x;
   }
 }
 
+void __stdcall sys_routine2(void* p) {
+  volatile uint64_t x = 0;
+  while (true) {
+    --x;
+  }
+}
+
+int g_times = 0;
+
+
+FnlThread* snode_get(list::node* n) {
+  return node_to_entry(n, FnlThread, snode);
+}
+
 void schedule() {
   CoreCBlock* cb = exec::get_core_block();
-  if (cb->current)
-    return;
-  list::node* node = list::pop_front(&cb->ready_th);
-  if (!node)
-    return;
-  auto thread = get<FnlThread>(node);
-  thread->core = cb->core_id;
-  sim::run_thread(thread->ctx);
+  FnlThread* thread = nullptr;
+
+  if (list::empty(&cb->ready_th)) {
+    if (!cb->current)
+      return;
+  } else {
+    auto thread = snode_get(list::pop_front(&cb->ready_th));
+    wprintf(L" %d switching to thread %llu\n", ++g_times, thread->id);
+    if (cb->current) {
+      CHECKNE(cb->current->id, thread->id);
+      list::push_back(&cb->ready_th, &cb->current->snode);
+    }
+    cb->current = thread;
+  }
+
+#if 1
+  if (g_times == 6) {
+    wprintf(L"runaway condition?\n");
+    auto ll = list::size(&cb->ready_th);
+    __debugbreak();
+  }
+#endif
+  
+  sim::switch_context(cb->current->ctx);
+  wprintf(L"xx\n");
 }
 
 void make_sys_process() {
@@ -114,27 +142,39 @@ void make_sys_process() {
   // the idle thread.
   FnlThread* idle = make_thread_obj(proc, 1UL);
   list::push_back(&threads, &idle->fno.node);
-  // the sys thread.
-  FnlThread* sys = make_thread_obj(proc, 2UL);
-  list::push_back(&threads, &sys->fno.node);
-  add_thread(sys, &sys_routine);
-  schedule();
+  // the sys thread 1.
+  FnlThread* sys1 = make_thread_obj(proc, 2UL);
+  list::push_back(&threads, &sys1->fno.node);
+  add_thread(sys1, &sys_routine1);
+  // the sys thread 2.
+  FnlThread* sys2 = make_thread_obj(proc, 3UL);
+  list::push_back(&threads, &sys2->fno.node);
+  add_thread(sys2, &sys_routine2);
 }
 
-void init() {
+void __stdcall interrupt(void* p) {
+  uint64_t icount = 0;
+  while (true) {
+    schedule();
+    ++icount;
+  }
+}
+
+
+void* init() {
   init_core_block(0);
   list::init(&processes);
   list::init(&threads);
   make_sys_process();
-  init_all_cores();
+  return sim::make_context(&interrupt);
+  //init_all_cores();
 }
 
 }
 
-int fnl_init() {
+void* fnl_init() {
   vmm::init();
-  exec::init();
-  return 0;
+  return exec::init();
 }
 
 int main() {
