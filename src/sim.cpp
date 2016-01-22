@@ -52,9 +52,21 @@ unsigned long __stdcall start_tfn(void* p) {
   ::ConvertThreadToFiberEx(nullptr, FIBER_FLAG_FLOAT_SWITCH);
   ctx_int_fiber = ctx->fn();
   ::SuspendThread(GetCurrentThread());
+rip_here:
   strange = strange + 1;
   while (true) {
     ::SwitchToFiber(ctx_int_fiber);
+    // We hit the __debugbreak, below. Which should not happend
+    // given that SwitchToFiber() should call the main.cpp interrupt() which calls'
+    // schedule() which calls switch_context() which should switch bettwen
+    // sys_routine1() and sys_routine2() either of those just loop forever so in
+    // theory only way to come back here is via run()'s SetThreadContext which
+    // should reset the RIP back to 'rip_here'.
+    //
+    // Commenting the debugbreak() below cause the other "runaway condition"
+    // __debugbreak(); in main.cpp to hit.
+    //
+    __debugbreak();
   }
   return 0;
 }
@@ -63,6 +75,7 @@ void core_start(int core_id, StartFn start) {
   Core* core = &cores[core_id];
   auto ctx = new StartCtx{start};
   core->win_th = ::CreateThread(nullptr, stack_size, start_tfn, ctx, 0, nullptr);
+#if 0
   while (true) {
     ::SuspendThread(core->win_th);
     auto count = ::ResumeThread(core->win_th);
@@ -70,6 +83,10 @@ void core_start(int core_id, StartFn start) {
       break;
     ::Sleep(10);
   }
+#else
+  ::Sleep(300);
+#endif
+
   core->th_ctx.ContextFlags = CONTEXT_ALL;
   if (!::GetThreadContext(core->win_th, &core->th_ctx))
     __debugbreak();
@@ -103,7 +120,8 @@ void run() {
     if (!rv) {
       wprintf(L"timer\n");
       auto sc = ::SuspendThread(cores[0].win_th);
-      cores[0].th_ctx.ContextFlags = CONTEXT_ALL; //CONTEXT_FULL | CONTEXT_DEBUG_REGISTERS;
+      cores[0].th_ctx.ContextFlags = CONTEXT_ALL;
+      cores[0].th_ctx.Rip -= 0x14;
       if (!::SetThreadContext(cores[0].win_th, &cores[0].th_ctx))
         __debugbreak();
       ::ResumeThread(cores[0].win_th);

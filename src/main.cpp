@@ -126,6 +126,8 @@ void schedule() {
 
 #if 1
   if (g_times == 6) {
+    // this means we are busy trying to switch fibers without the timer being
+    // involved. 
     wprintf(L"runaway condition?\n");
     auto ll = list::size(&cb->ready_th);
     __debugbreak();
@@ -133,7 +135,6 @@ void schedule() {
 #endif
   
   sim::switch_context(cb->current->ctx);
-  wprintf(L"xx\n");
 }
 
 void make_sys_process() {
