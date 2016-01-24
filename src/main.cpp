@@ -128,18 +128,7 @@ void schedule() {
       list::push_back(&cb->ready_th, &cb->current->snode);
     }
     cb->current = thread;
-  }
-
-#if 0
-  if (g_times == 6) {
-    // this means we are busy trying to switch fibers without the timer being
-    // involved. 
-    wprintf(L"runaway condition?\n");
-    auto ll = list::size(&cb->ready_th);
-    __debugbreak();
-  }
-#endif
-  
+  }  
   sim::switch_context(cb->current->ctx);
 }
 
@@ -166,32 +155,20 @@ void make_sys_process() {
 }
 
 void __stdcall interrupt(void* p) {
-#if 1
-  uint64_t icount = 0;
-  while (true) {
-    schedule();
-    ++icount;
-  }
-#else
   schedule();
-  KPANIC;
-#endif
 }
 
-
-void* init() {
+sim::ThreadFn init() {
   init_core_block(0);
   list::init(&processes);
   list::init(&threads);
   make_sys_process();
-  //return sim::make_context(&interrupt);
-  //init_all_cores();
   return &interrupt;
 }
 
 }
 
-void* fnl_init() {
+sim::ThreadFn fnl_init() {
   vmm::init();
   return exec::init();
 }

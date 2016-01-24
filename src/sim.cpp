@@ -1,17 +1,13 @@
 #include "stdafx.h"
 #include "sim.h"
+#include "threadjack_x64.h"
 
 #include <intrin.h>
-
-namespace {
-
-}
 
 namespace sim {
 
 struct Core {
   HANDLE win_th;
-  CONTEXT th_ctx;
 };
 
 Core cores[num_cores];
@@ -42,75 +38,33 @@ void* user_gs(void* new_gs) {
 }
 
 struct StartCtx {
-  StartFn fn;
+  StartFn init_fn;
 };
 
-void* ctx_orig_fiber = nullptr;
-void* ctx_int_fiber = nullptr;
-
-volatile long gate0 = 0;
-volatile long gate1 = 0;
+PFIBER_START_ROUTINE interrupt_fn = nullptr;
 
 unsigned long __stdcall start_tfn(void* p) {
+  ::ConvertThreadToFiberEx(nullptr, FIBER_FLAG_FLOAT_SWITCH);
   auto ctx = reinterpret_cast<StartCtx*>(p);
-  void* ff = ctx->fn();
-
-  ctx_orig_fiber = ::ConvertThreadToFiberEx(nullptr, FIBER_FLAG_FLOAT_SWITCH);
-  ctx_int_fiber  = ::CreateFiberEx(4096 * 2, stack_size, FIBER_FLAG_FLOAT_SWITCH, (LPFIBER_START_ROUTINE)ff, nullptr);
-
-
-  while (_InterlockedCompareExchange(&gate0, 1, 1) == 0L) {
-    _InterlockedOr(&gate1, 1);
-  }
- 
-#if 0
-  wprintf(L"~ ctx is %p\n", ::GetCurrentFiber());
-#endif
-
-#if 0
-  if (ctx_orig_fiber != ::GetCurrentFiber()) {
-    ::SwitchToFiber(ctx_orig_fiber);
-  }
-#endif
-
-
-  ::SwitchToFiber(ctx_int_fiber);
+  interrupt_fn = ctx->init_fn();
 
   while (true) {
     YieldProcessor();
   }
-
   return 0;
 }
 
-void core_start(int core_id, StartFn start) {
+void core_start(int core_id, StartFn init_fn) {
   Core* core = &cores[core_id];
-  auto ctx = new StartCtx{start};
+  auto ctx = new StartCtx{init_fn};
   core->win_th = ::CreateThread(nullptr, stack_size, start_tfn, ctx, 0, nullptr);
-
-  while (true) {
-    auto spin = _InterlockedCompareExchange(&gate1, 0, 1);
-    if (spin)
-      break;
-    ::YieldProcessor();
-  }
-
-  ::SuspendThread(core->win_th);
-  core->th_ctx.ContextFlags = CONTEXT_ALL;
-  if (!::GetThreadContext(core->win_th, &core->th_ctx))
-    __debugbreak();
-
-  _InterlockedOr(&gate0, 1);
-  ::ResumeThread(core->win_th);
 }
 
 void* make_context(ThreadFn fn) {
   return ::CreateFiberEx(4096 * 2, stack_size, FIBER_FLAG_FLOAT_SWITCH, fn, nullptr);
 }
 
-
 void switch_context(void* context) {
-  //wprintf(L"ctx is %p\n", context);
   ::SwitchToFiber(context);
 }
 
@@ -130,13 +84,9 @@ void run() {
     BOOL rv = ::GetQueuedCompletionStatus(cport, &bytes, &key, &ov, 2000);
     if (!rv) {
       wprintf(L"timer\n");
-      auto sc = ::SuspendThread(cores[0].win_th);
-      if (sc > 0)
-        __debugbreak();
-      cores[0].th_ctx.ContextFlags = CONTEXT_FULL; //ONTEXT_CONTROL;
-      if (!::SetThreadContext(cores[0].win_th, &cores[0].th_ctx))
-        __debugbreak();
-      ::ResumeThread(cores[0].win_th);
+      while (!threadjack::interrupt(cores[0].win_th, interrupt_fn, nullptr)) {
+        YieldProcessor();
+      }
     }
     else {
       wprintf(L"got event. exiting\n");
