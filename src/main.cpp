@@ -86,17 +86,23 @@ void add_thread(FnlThread* thread, sim::ThreadFn fn) {
   list::push_back(&cb->ready_th, &thread->snode);
 }
 
+volatile uint64_t xy = 0;
+
 void __stdcall sys_routine1(void* p) {
-  volatile uint64_t x = 0;
   while (true) {
-    ++x;
+    ++xy;
   }
 }
 
 void __stdcall sys_routine2(void* p) {
-  volatile uint64_t x = 0;
   while (true) {
-    --x;
+    --xy;
+  }
+}
+
+void __stdcall sys_routine3(void* p) {
+  while (true) {
+    xy *= 2;
   }
 }
 
@@ -124,7 +130,7 @@ void schedule() {
     cb->current = thread;
   }
 
-#if 1
+#if 0
   if (g_times == 6) {
     // this means we are busy trying to switch fibers without the timer being
     // involved. 
@@ -147,18 +153,29 @@ void make_sys_process() {
   FnlThread* sys1 = make_thread_obj(proc, 2UL);
   list::push_back(&threads, &sys1->fno.node);
   add_thread(sys1, &sys_routine1);
+  sys1 = nullptr;
   // the sys thread 2.
   FnlThread* sys2 = make_thread_obj(proc, 3UL);
   list::push_back(&threads, &sys2->fno.node);
   add_thread(sys2, &sys_routine2);
+  sys2 = nullptr;
+  // the sys thread 3.
+  FnlThread* sys3 = make_thread_obj(proc, 4UL);
+  list::push_back(&threads, &sys3->fno.node);
+  add_thread(sys3, &sys_routine3);
 }
 
 void __stdcall interrupt(void* p) {
+#if 1
   uint64_t icount = 0;
   while (true) {
     schedule();
     ++icount;
   }
+#else
+  schedule();
+  KPANIC;
+#endif
 }
 
 
@@ -167,8 +184,9 @@ void* init() {
   list::init(&processes);
   list::init(&threads);
   make_sys_process();
-  return sim::make_context(&interrupt);
+  //return sim::make_context(&interrupt);
   //init_all_cores();
+  return &interrupt;
 }
 
 }
