@@ -12,6 +12,7 @@ struct Core {
 
 Core cores[num_cores];
 HANDLE cport;
+volatile uint64_t ctx_switches = 0;
 
 void* kern_gs(void* new_gs) {
   __declspec(thread) static void* gs;
@@ -65,12 +66,14 @@ void* make_context(ThreadFn fn) {
 }
 
 void switch_context(void* context) {
+  ++ctx_switches;
   ::SwitchToFiber(context);
 }
 
 void init() {
   cport = ::CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 1);
   CHECKNE(cport, nullptr);
+  threadjack::init();
 }
 
 void run() {
@@ -78,12 +81,15 @@ void run() {
   UINT_PTR key = 0;
   OVERLAPPED* ov = nullptr;
 
-  wprintf(L"fnl sim running. %d cores x64\n", num_cores);
+  wprintf(L"fnl x64 sim running. %d simulated cores\n", num_cores);
+
+  if (!::SetThreadPriority(::GetCurrentThread(), THREAD_PRIORITY_HIGHEST))
+    __debugbreak();
 
   while (true) {
-    BOOL rv = ::GetQueuedCompletionStatus(cport, &bytes, &key, &ov, 2000);
+    BOOL rv = ::GetQueuedCompletionStatus(cport, &bytes, &key, &ov, 30);
     if (!rv) {
-      wprintf(L"timer\n");
+      wprintf(L"ctx switches %llu\r", ctx_switches);
       while (!threadjack::interrupt(cores[0].win_th, interrupt_fn, nullptr)) {
         YieldProcessor();
       }
