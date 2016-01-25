@@ -2,130 +2,114 @@
 #include "threadjack_x64.h"
 
 namespace {
+HANDLE ready_event = nullptr;
 
-#define INTEGER_REG_SIZE (FIELD_OFFSET(CONTEXT, R15) - FIELD_OFFSET(CONTEXT, Rax))
-
-#define HOME_SPACE_SIZE (sizeof(((PCONTEXT)0)->R8) + sizeof(((PCONTEXT)0)->Rcx) + \
-                         sizeof(((PCONTEXT)0)->R9) + sizeof(((PCONTEXT)0)->Rdx))
-
-#define CONTROL_REG_SIZE (sizeof(((PCONTEXT)0)->Rip) + sizeof(((PCONTEXT)0)->EFlags))
+// StackSpace returns 172 bytes.
+DWORD64 StackSpace() {
+  const int integer_sz = FIELD_OFFSET(CONTEXT, R15) - FIELD_OFFSET(CONTEXT, Rax);
+  const int home_sz = sizeof(CONTEXT::R8) + sizeof(CONTEXT::Rcx) +
+                      sizeof(CONTEXT::R9) + sizeof(CONTEXT::Rdx);
+  const int control_sz = sizeof(CONTEXT::Rip) + sizeof(CONTEXT::EFlags);
+  return integer_sz + control_sz + home_sz + sizeof(CONTEXT::Rip);
+}
 
 // Implementation is in restore.asm.
+// We use ml64.exe /Fo restore.obj /c restore.asm to create the obj.
 extern "C" void RestoreX64(PDWORD64 Rsp);
 
 __declspec(noreturn) 
-void __stdcall Trampolinex64(
-  PCONTEXT PointerToOldContext,
-  HANDLE Event,
-  PFIBER_START_ROUTINE fn,
-  PVOID arg) {
+void __stdcall Trampolinex64(CONTEXT* old_context,      // rcx
+                             HANDLE ready_event,        // rdx
+                             PFIBER_START_ROUTINE fn,   // R8
+                             void* arg) {               // R9
+  CONTEXT oc = *old_context;
+  if (!::SetEvent(ready_event))
+    __debugbreak();
 
-  CONTEXT OldContext;
-  PDWORD64 Rsp;
-
-  OldContext = *PointerToOldContext;
-  SetEvent(Event);
-
-  Rsp = (PDWORD64)OldContext.Rsp;
-  *(--Rsp) = OldContext.Rip;
-  *(--Rsp) = OldContext.EFlags;
-  *(--Rsp) = OldContext.Rax;
-  *(--Rsp) = OldContext.Rcx;
-  *(--Rsp) = OldContext.Rdx;
-  *(--Rsp) = OldContext.Rbx;
-  *(--Rsp) = OldContext.Rbp;
-  *(--Rsp) = OldContext.Rsi;
-  *(--Rsp) = OldContext.Rdi;
-  *(--Rsp) = OldContext.R8;
-  *(--Rsp) = OldContext.R9;
-  *(--Rsp) = OldContext.R10;
-  *(--Rsp) = OldContext.R11;
-  *(--Rsp) = OldContext.R12;
-  *(--Rsp) = OldContext.R13;
-  *(--Rsp) = OldContext.R14;
-  *(--Rsp) = OldContext.R15;
+  DWORD64* Rsp = (DWORD64*)oc.Rsp;
+  *(--Rsp) = oc.Rip;        // ret
+  *(--Rsp) = oc.EFlags;     // popfq
+  *(--Rsp) = oc.Rax;        // pop rax
+  *(--Rsp) = oc.Rcx;        // pop rbx    ??
+  *(--Rsp) = oc.Rdx;        // pop rcx    ??
+  *(--Rsp) = oc.Rbx;        // pop rdx    ??
+  *(--Rsp) = oc.Rbp;        // pop rbp
+  *(--Rsp) = oc.Rsi;        // pop rsi
+  *(--Rsp) = oc.Rdi;        // pop rdi
+  *(--Rsp) = oc.R8;         // pop r8
+  *(--Rsp) = oc.R9;         // pop r9
+  *(--Rsp) = oc.R10;        // pop r10
+  *(--Rsp) = oc.R11;        // pop r11
+  *(--Rsp) = oc.R12;        // pop r12
+  *(--Rsp) = oc.R13;        // pop r13
+  *(--Rsp) = oc.R14;        // pop r14
+  *(--Rsp) = oc.R15;        // pop r15
 
   fn(arg);
-
-  //
   // Restore the integer and contol registers.
-  //
   RestoreX64(Rsp);
 }
 
-FORCEINLINE BOOL WINAPI
-IsThreadInUserMode(__in LONG ContextFlags) {
-  const LONG Mask = CONTEXT_EXCEPTION_REPORTING
-    | CONTEXT_EXCEPTION_ACTIVE
-    | CONTEXT_SERVICE_ACTIVE;
-
-  return (Mask & ContextFlags) == CONTEXT_EXCEPTION_REPORTING;
+__forceinline bool WINAPI IsThreadInUserMode(LONG ctx_flags) {
+  const LONG mask = CONTEXT_EXCEPTION_REPORTING |
+                    CONTEXT_EXCEPTION_ACTIVE |
+                    CONTEXT_SERVICE_ACTIVE;
+  return (mask & ctx_flags) == CONTEXT_EXCEPTION_REPORTING;
 }
 
-FORCEINLINE BOOL xGetThreadContext(HANDLE Thread,
-  PCONTEXT OldContext) {
-  RtlZeroMemory(OldContext, sizeof(*OldContext));
+__forceinline bool UM_GetThreadContext(HANDLE thread, CONTEXT* old_context) {
+  memset(old_context, 0, sizeof(*old_context));
   // Try to get the thread's context and ensure it is running in user-mode.
-  OldContext->ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER | CONTEXT_EXCEPTION_REQUEST;
-  return GetThreadContext(Thread, OldContext) && IsThreadInUserMode(OldContext->ContextFlags);
+  old_context->ContextFlags = CONTEXT_CONTROL |
+                              CONTEXT_INTEGER |
+                              CONTEXT_EXCEPTION_REQUEST;
+  return GetThreadContext(thread, old_context) &&
+         IsThreadInUserMode(old_context->ContextFlags);
 }
 
-FORCEINLINE BOOL SetNewContext(
-    HANDLE Thread,
-    PCONTEXT OldContext,
-    HANDLE Event,
-    PFIBER_START_ROUTINE Function,
-    PVOID Argument) {
-  CONTEXT NewContext = *OldContext;
-  NewContext.Rip = (DWORD64)Trampolinex64;
-
-  //
+__forceinline bool SetNewContext(HANDLE thread,
+                                 CONTEXT* old_context,
+                                 HANDLE ready_event,
+                                 PFIBER_START_ROUTINE fn,
+                                 void* arg) {
+  CONTEXT new_context = *old_context;
+  new_context.Rip = (DWORD64)Trampolinex64;
   // Reserve space on the stack for the integer and control registers + 
   // home space for Trampoline (R9, R8, Rdx and Rcx) + return address.
-  //
-
-  NewContext.Rsp -= INTEGER_REG_SIZE + CONTROL_REG_SIZE +
-    HOME_SPACE_SIZE + sizeof(((PCONTEXT)0)->Rip);
-
-  // Arguments.
-  NewContext.Rcx = (DWORD64)OldContext;
-  NewContext.Rdx = (DWORD64)Event;
-  NewContext.R8 = (DWORD64)Function;
-  NewContext.R9 = (DWORD64)Argument;
-
-  return SetThreadContext(Thread, &NewContext);
+  const DWORD64 reserve = StackSpace();
+  new_context.Rsp -= reserve;
+  // Arguments to trampoline.
+  new_context.Rcx = (DWORD64)old_context;
+  new_context.Rdx = (DWORD64)ready_event;
+  new_context.R8 = (DWORD64)fn;
+  new_context.R9 = (DWORD64)arg;
+  // Jump to trampoline.
+  return SetThreadContext(thread, &new_context) == TRUE;
 }
 
+}
+
+bool threadjack::init() {
+  // auto-reset event.
+  ready_event = ::CreateEventW(NULL, FALSE, FALSE, NULL);
+  return true;
 }
 
 bool threadjack::interrupt(HANDLE thread, PFIBER_START_ROUTINE fn, void * arg) {
-  HANDLE Event;
-  CONTEXT OldContext;
-
   long sc = SuspendThread(thread);
-  if (sc != 0)
+  if (sc < 0)
     return false;
-
-  Event = NULL;
-
-  //
   // Try to set the new context and wait until the thread no longer
   // needs the old one.
-  //
+  CONTEXT old_ctx;
+  if (!UM_GetThreadContext(thread, &old_ctx))
+    goto error;
+  if (!SetNewContext(thread, &old_ctx, ready_event, fn, arg))
+    goto error;
+  ::ResumeThread(thread);
+  return ::WaitForSingleObject(ready_event, INFINITE) == WAIT_OBJECT_0;
 
-  bool Success = xGetThreadContext(thread, &OldContext)
-    && (Event = CreateEvent(NULL, TRUE, FALSE, NULL)) != NULL
-    && SetNewContext(thread, &OldContext, Event, fn, arg);
-
-  ResumeThread(thread);
-
-  Success = Success && WaitForSingleObject(Event, INFINITE) == WAIT_OBJECT_0;
-
-  if (Event != NULL) {
-    CloseHandle(Event);
-  }
-
-  return Success;
-
+error:
+  ::ResumeThread(thread);
   return false;
 }
