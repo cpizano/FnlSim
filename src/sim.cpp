@@ -14,28 +14,19 @@ Core cores[num_cores];
 HANDLE cport;
 volatile uint64_t ctx_switches = 0;
 
+__declspec(thread) void* k_gs;
+__declspec(thread) void* u_gs;
+
 void* kern_gs(void* new_gs) {
-  __declspec(thread) static void* gs;
-  if (new_gs) {
-    void* tmp = gs;
-    gs = new_gs;
-    return tmp;
-  }
-  else {
-    return gs;
-  }
+  if (new_gs)
+    k_gs = new_gs;
+  return k_gs;
 }
 
 void* user_gs(void* new_gs) {
-  __declspec(thread) static void* gs;
-  if (new_gs) {
-    void* tmp = gs;
-    gs = new_gs;
-    return tmp;
-  }
-  else {
-    return gs;
-  }
+  if (new_gs)
+    u_gs = new_gs;
+  return u_gs;
 }
 
 struct StartCtx {
