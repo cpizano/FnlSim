@@ -106,8 +106,6 @@ void __stdcall sys_routine3(void* p) {
   }
 }
 
-int g_times = 0;
-
 FnlThread* snode_get(list::node* n) {
   return node_to_entry(n, FnlThread, snode);
 }
@@ -121,7 +119,6 @@ void schedule() {
       return;
   } else {
     auto thread = snode_get(list::pop_front(&cb->ready_th));
-    // wprintf(L" %d switching to thread %llu\n", ++g_times, thread->id);
     if (cb->current) {
       CHECKNE(cb->current->id, thread->id);
       list::push_back(&cb->ready_th, &cb->current->snode);
